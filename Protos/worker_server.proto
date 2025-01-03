@@ -1,0 +1,71 @@
+syntax = "proto3";
+
+package worker_server;
+
+message ControlCommandRequest {
+    string worker_id = 1; // Identitas unik worker
+    ControlCommand.CommandType command = 2; // Jenis perintah
+}
+  
+message SystemInfoRequest {
+    bool include_cpu_info = 1; 
+    bool include_gpu_info = 2; 
+    bool include_network_info = 3; 
+}
+  
+message SystemInfoResponse {
+    string timestamp = 1; 
+    string worker_id = 2; 
+    
+    string cpu_processor = 3;
+    string cpu_physical_core = 4;
+    string cpu_total_core = 5;
+    string cpu_max_frequency = 6;
+    string cpu_min_frequency = 7;
+    string cpu_current_frequency = 8;
+    string cpu_usage = 9;
+
+    string system_platform = 10;
+    string system_platform_version = 11;
+    string system_ram = 12;
+    string ip_address = 13;
+    string mac_address = 14;
+
+    repeated GPUInfo gpu = 15;
+}
+  
+// Request dari server ke worker
+message ControlCommand {
+  enum CommandType {
+    START = 0;
+    STOP = 1;
+    RESTART = 2;
+  }
+
+  CommandType command = 1;
+}
+
+message GPUInfo {
+  string gpu_uuid = 1;
+  string gpu_name = 2;
+  string gpu_total_memory = 3;
+  string gpu_used_memory = 4;
+  string gpu_free_memory = 5;
+  string gpu_utilization = 6;
+  string gpu_temperature = 7;
+}
+
+service WorkerServer {
+    // Server mengirimkan perintah ke worker
+    rpc SendCommand(ControlCommandRequest) returns (CommandResponse);
+  
+    // Worker mengirimkan info sistem ke server
+    rpc GetSystemInfo(SystemInfoRequest) returns (SystemInfoResponse);
+  }
+  
+  // Respons untuk perintah
+  message CommandResponse {
+    string status = 1; // Misal: "SUCCESS", "FAILED"
+    string message = 2; // Informasi tambahan, seperti alasan kegagalan
+  }
+  
