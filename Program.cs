@@ -29,26 +29,26 @@ var app = builder.Build();
 
 app.UseHttpsRedirection();
 
-app.MapGet("/start", async (HttpContext context) =>
+app.MapGet("/start/{workerId}", async (HttpContext context, string workerId) =>
 {
     Console.WriteLine("Sending commands to gRPC server...");
 
     var commands = new List<WorkerCommand>
     {
-        new WorkerCommand { WorkerId = "1", Action = "start" },
+        new WorkerCommand { WorkerId = workerId, Action = "start" },
     };
 
     var response = await ManageWorkerAsync(commands);
     await context.Response.WriteAsync(response);
 });
 
-app.MapGet("/stop", async (HttpContext context) =>
+app.MapGet("/stop/{workerId}", async (HttpContext context, string workerId) =>
 {
     Console.WriteLine("Sending commands to gRPC server...");
 
     var commands = new List<WorkerCommand>
     {
-        new WorkerCommand { WorkerId = "1", Action = "stop" },
+        new WorkerCommand { WorkerId = workerId, Action = "stop" },
     };
 
     var response = await ManageWorkerAsync(commands);
@@ -56,13 +56,13 @@ app.MapGet("/stop", async (HttpContext context) =>
 });
 
 // Configure HTTP GET endpoints
-app.MapGet("/restart", async (HttpContext context) =>
+app.MapGet("/restart/{workerId}", async (HttpContext context, string workerId) =>
 {
     Console.WriteLine("Sending commands to gRPC server...");
 
     var commands = new List<WorkerCommand>
     {
-        new WorkerCommand { WorkerId = "1", Action = "restart" },
+        new WorkerCommand { WorkerId = workerId, Action = "restart" },
     };
 
     var response = await ManageWorkerAsync(commands);
