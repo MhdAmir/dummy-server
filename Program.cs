@@ -6,13 +6,14 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using System;
+using System.Collections.Generic;
+using System.Threading.Channels;
 using System.Threading.Tasks;
-using WorkerServer;
-using static WorkerServer.WorkerServer; // Ensure this matches the namespace in the generated gRPC classes
+using Worker;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Configure Kestrel to use HTTPS and HTTP/2
 builder.WebHost.ConfigureKestrel(options =>
 {
     options.ListenLocalhost(5246, listenOptions =>
@@ -28,76 +29,77 @@ var app = builder.Build();
 
 app.UseHttpsRedirection();
 
-// Configure HTTP GET endpoints
 app.MapGet("/start", async (HttpContext context) =>
 {
-    var response = await SendCommandAsync("start");
-    Console.WriteLine("response");
+    Console.WriteLine("Sending commands to gRPC server...");
+
+    var commands = new List<WorkerCommand>
+    {
+        new WorkerCommand { WorkerId = "1", Action = "start" },
+    };
+
+    var response = await ManageWorkerAsync(commands);
     await context.Response.WriteAsync(response);
 });
 
 app.MapGet("/stop", async (HttpContext context) =>
 {
-    var response = await SendCommandAsync("stop");
-    await context.Response.WriteAsync(response);
-});
+    Console.WriteLine("Sending commands to gRPC server...");
 
-app.MapGet("/restart", async (HttpContext context) =>
-{
-    var response = await SendCommandAsync("restart");
-    Console.WriteLine(response);
-    await context.Response.WriteAsync(response);
-});
-
-app.MapGet("/getsysteminfo", async (HttpContext context) =>
-{
-    var response = await GetSystemInfoAsync();
-    await context.Response.WriteAsync(response);
-});
-
-static async Task<string> SendCommandAsync(string command)
-{
-    using var channel = GrpcChannel.ForAddress("http://localhost:50051"); // Replace with actual gRPC server address
-    var client = new WorkerServerClient(channel);
-
-    var request = new ControlCommandRequest
+    var commands = new List<WorkerCommand>
     {
-        WorkerId = "worker-123",
-        Command = command switch
-        {
-            "start" => ControlCommand.Types.CommandType.Start,
-            "stop" => ControlCommand.Types.CommandType.Stop,
-            "restart" => ControlCommand.Types.CommandType.Restart,
-            _ => throw new ArgumentException("Invalid command")
-        }
+        new WorkerCommand { WorkerId = "1", Action = "stop" },
     };
 
-    try
-    {
-        var response = await client.SendCommandAsync(request);
-        return $"Command '{command}' executed successfully. Response: {response.Status}";
-    }
-    catch (RpcException ex)
-    {
-        return $"Failed to execute command '{command}'. Error: {ex.Status.Detail}";
-    }
-}
+    var response = await ManageWorkerAsync(commands);
+    await context.Response.WriteAsync(response);
+});
 
-static async Task<string> GetSystemInfoAsync()
+// Configure HTTP GET endpoints
+app.MapGet("/restart", async (HttpContext context) =>
 {
-    using var channel = GrpcChannel.ForAddress("http://localhost:50051"); // Replace with actual gRPC server address
-    var client = new WorkerServerClient(channel);
+    Console.WriteLine("Sending commands to gRPC server...");
 
-    var request = new SystemInfoRequest();
-    try
+    var commands = new List<WorkerCommand>
     {
-        var response = await client.GetSystemInfoAsync(request);
-        return $"System Info: CPU: {response.CpuUsage}, RAM: {response.SystemRam}";
-    }
-    catch (RpcException ex)
+        new WorkerCommand { WorkerId = "1", Action = "restart" },
+    };
+
+    var response = await ManageWorkerAsync(commands);
+    await context.Response.WriteAsync(response);
+});
+
+static async Task<string> ManageWorkerAsync(IEnumerable<WorkerCommand> commands)
+{
+
+    using var channel = GrpcChannel.ForAddress("http://localhost:50051"); // Replace with actual gRPC server address
+    var client = new WorkerService.WorkerServiceClient(channel);
+
+    using var call = client.ManageWorker();
+
+    // Send commands in a separate task
+    var sendTask = Task.Run(async () =>
     {
-        return $"Failed to get system info. Error: {ex.Status.Detail}";
+        foreach (var command in commands)
+        {
+            Console.WriteLine($"Sending command: {command.Action}");
+            await call.RequestStream.WriteAsync(command);
+            await Task.Delay(500); 
+        }
+        Console.WriteLine("Sending commands to gRPC server...");
+        await call.RequestStream.CompleteAsync();
+    });
+
+    // Receive responses
+    var responseMessages = new List<string>();
+    await foreach (var response in call.ResponseStream.ReadAllAsync())
+    {
+        Console.WriteLine($"Received status: {response.Status}, Message: {response.Message}");
+        responseMessages.Add($"WorkerId: {response.WorkerId}, Status: {response.Status}, Message: {response.Message}");
     }
+
+    await sendTask; // Ensure all commands are sent before finishing
+    return string.Join("\n", responseMessages);
 }
 
 // Run the app
