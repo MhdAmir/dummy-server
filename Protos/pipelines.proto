@@ -1,0 +1,57 @@
+syntax = "proto3";
+
+package pipelines;
+
+service PipelineService {
+    rpc AddPipeline (PipelineRequest) returns (PipelineResponse);
+    rpc ListPipelines (EmptyRequest) returns (stream Pipeline);
+}
+
+message EmptyRequest {}
+
+message PipelineRequest {
+    string id = 1;
+    string status = 2;
+    repeated string streamid = 3;
+    Preprocessing preprocessing = 4;
+    Detection detection = 5;
+}
+
+message PipelineResponse {
+    string message = 1;
+}
+
+message Preprocessing {
+    Resize resize = 1;
+    ROI roi = 2;
+}
+
+message Resize {
+    int32 width = 1;
+    int32 height = 2;
+}
+
+message ROI {
+    bool active = 1;
+    int32 x = 2;
+    int32 y = 3;
+    int32 width = 4;
+    int32 height = 5;
+}
+
+message Detection {
+    PPE ppe = 1;
+}
+
+message PPE {
+    bool active = 1;
+    int32 threshold = 2;
+}
+
+message Pipeline {
+    string id = 1;
+    string status = 2;
+    repeated string streamid = 3;
+    Preprocessing preprocessing = 4;
+    Detection detection = 5;
+}
